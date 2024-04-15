@@ -5,38 +5,36 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
     <style>
-        #map { height: 400px; }
+        #map { height: 600px; }
     </style>
 </head>
 <body>
     <div id="map"></div>
     <script>
         var map = L.map('map').setView([20, 0], 2);
-
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
             attribution: '© OpenStreetMap contributors'
         }).addTo(map);
 
-        // Example data
+        // Load your volcano data here
+        // This example uses hardcoded data, but you'll replace this with your CSV data
         var volcanoes = [
             { name: 'Volcano 1', lat: 20, lon: 0, year: 1990, details: 'Details for 1990 eruption' },
             { name: 'Volcano 2', lat: 25, lon: 5, year: 2000, details: 'Details for 2000 eruption' }
         ];
 
         // Add markers with popups
-        volcanoes.forEach(volcano => {
+        volcanoes.forEach(function(volcano) {
             var marker = L.marker([volcano.lat, volcano.lon]).addTo(map);
-            var popupContent = `
-                <b>${volcano.name}</b><br>
-                <a href="#" onclick="showDetails(${volcano.year}, '${volcano.details}')">Click for details</a>
-            `;
+            var popupContent = '<b>' + volcano.name + '</b><br>' +
+                '<a href="#" onclick="showDetails(\'' + volcano.year + '\', \'' + escape(volcano.details) + '\')">Click for details</a>';
             marker.bindPopup(popupContent);
         });
 
         // Function to show details
         function showDetails(year, details) {
-            alert(`Year: ${year}\nDetails: ${details}`);
+            alert('Year: ' + year + '\nDetails: ' + unescape(details));
         }
     </script>
 </body>
