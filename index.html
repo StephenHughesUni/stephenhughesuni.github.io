@@ -25,22 +25,26 @@
                 }
                 return response.json();
             })
-        .then(data => {
-            data.forEach(function(eruption) {
-                if (eruption.Latitude && eruption.Longitude) {
-                    var popupContent = `<b>${eruption['Volcano Name']}</b><br>
-                                        Year: ${eruption.Year}<br>
-                                        Location: ${eruption.Location}<br>
-                                        Details: ${eruption.Details || 'No additional details available.'}`;
-                    L.marker([eruption.Latitude, eruption.Longitude])
-                        .bindPopup(popupContent)
-                        .addTo(map);
-                }
+            .then(data => {
+                data.forEach(function(eruption) {
+                    if (eruption.Coordinates) {
+                        var coords = eruption.Coordinates.split(',');
+                        var latitude = parseFloat(coords[0].trim());
+                        var longitude = parseFloat(coords[1].trim());
+
+                        var popupContent = `<b>${eruption['Volcano Name']}</b><br>
+                                            Year: ${eruption.Year}<br>
+                                            Location: ${eruption.Location}<br>
+                                            Details: ${eruption.Details || 'No additional details available.'}`;
+                        L.marker([latitude, longitude])
+                            .bindPopup(popupContent)
+                            .addTo(map);
+                    }
+                });
+            })
+            .catch(error => {
+                console.error('There has been a problem with your fetch operation:', error);
             });
-        })
-        .catch(error => {
-            console.error('There has been a problem with your fetch operation:', error);
-        });
     </script>
 </body>
 </html>
