@@ -18,22 +18,29 @@
         }).addTo(map);
 
         // Fetch the JSON data asynchronously
-        fetch('eruptions.json')
-            .then(response => response.json())
-            .then(data => {
-                // Use the data to create markers
-                data.forEach(function(eruption) {
-                    if (eruption.Latitude && eruption.Longitude) {
-                        var popupContent = '<b>' + eruption['Volcano Name'] + '</b><br>' +
-                                           'Year: ' + eruption.Year + '<br>' +
-                                           'Location: ' + eruption.Location + '<br>' +
-                                           'Details: ' + eruption.Details;
-                        L.marker([eruption.Latitude, eruption.Longitude]).addTo(map)
-                          .bindPopup(popupContent);
-                    }
-                });
+        fetch('https://stephenhughesuni.github.io/eruptions.json')  // Use the correct URL based on your GitHub Pages configuration
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok ' + response.statusText);
+                }
+                return response.json();
             })
-            .catch(error => console.error('Error loading the data:', error));
+        .then(data => {
+            data.forEach(function(eruption) {
+                if (eruption.Latitude && eruption.Longitude) {
+                    var popupContent = `<b>${eruption['Volcano Name']}</b><br>
+                                        Year: ${eruption.Year}<br>
+                                        Location: ${eruption.Location}<br>
+                                        Details: ${eruption.Details || 'No additional details available.'}`;
+                    L.marker([eruption.Latitude, eruption.Longitude])
+                        .bindPopup(popupContent)
+                        .addTo(map);
+                }
+            });
+        })
+        .catch(error => {
+            console.error('There has been a problem with your fetch operation:', error);
+        });
     </script>
 </body>
 </html>
