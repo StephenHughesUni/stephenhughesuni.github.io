@@ -18,29 +18,73 @@
         }).addTo(map);
 
         // Fetch the JSON data asynchronously
-        fetch('https://stephenhughesuni.github.io/csvjson.json')  // Use the correct URL based on your GitHub Pages configuration
+        fetch('https://stephenhughesuni.github.io/csvjson.json')
             .then(response => {
                 if (!response.ok) {
-                    throw new Error('Network response was not ok ' + response.statusText);
+                    throw new Error('Network response was not ok: ' + response.statusText);
                 }
                 return response.json();
             })
             .then(data => {
+                // Organize data by volcano
+                const volcanoEruptions = {};
                 data.forEach(function(eruption) {
-                    if (eruption.Coordinates) {
-                        var coords = eruption.Coordinates.split(',');
-                        var latitude = parseFloat(coords[0].trim());
-                        var longitude = parseFloat(coords[1].trim());
-
-                        var popupContent = `<b>${eruption['Volcano Name']}</b><br>
-                                            Year: ${eruption.Year}<br>
-                                            Location: ${eruption.Location}<br>
-                                            Details: ${eruption.Details || 'No additional details available.'}`;
-                        L.marker([latitude, longitude])
-                            .bindPopup(popupContent)
-                            .addTo(map);
+                    var key = eruption['Volcano Name'];
+                    if (!volcanoEruptions[key]) {
+                        volcanoEruptions[key] = [];
                     }
+                    volcanoEruptions[key].push(eruption);
                 });
+
+                // Create markers for each volcano
+                for (var volcano in volcanoEruptions) {
+                    var eruptions = volcanoEruptions[volcano];
+                    eruptions.forEach(function(eruption) {
+                        var latLng = eruption.Coordinates.split(', ').map(Number);
+                        var marker = L.marker(latLng).addTo(map);
+                        var popupContent = createPopupContent(volcano, eruptions);
+                        marker.bindPopup(popupContent);
+                    });
+                }
+
+                function createPopupContent(volcano, eruptions) {
+                    // Start the list of years
+                    var popupContent = '<b>' + volcano + '</b><br><ul>';
+                    eruptions.forEach(function(eruption) {
+                        popupContent += '<li><a href="#" onclick="showEruptionDetails(event, \'' +
+                                        JSON.stringify(eruption).replace(/"/g, '&quot;') + '\')">' +
+                                        eruption.Year + '</a></li>';
+                    });
+                    popupContent += '</ul>';
+                    return popupContent;
+                }
+
+                window.showEruptionDetails = function(event, eruptionData) {
+                    // Prevent the default link behavior
+                    event.preventDefault();
+
+                    // Parse the eruption data
+                    var eruption = JSON.parse(eruptionData);
+
+                    // Create content for the detailed information
+                    var detailsContent = '<h3>' + eruption['Year'] + ': ' + eruption['Volcano Name'] + '</h3>' +
+                                         '<p><b>Location:</b> ' + eruption['Location'] + '</p>' +
+                                         '<p><b>Date:</b> ' + eruption['Year'] + '-' +
+                                         (eruption['Month'] || 'Unknown') + '-' +
+                                         (eruption['Day'] || 'Unknown') + '</p>' +
+                                         '<p><b>Volcano Type:</b> ' + eruption['Volcano Type'] + '</p>' +
+                                         '<p><b>Status:</b> ' + eruption['Status'] + '</p>' +
+                                         '<p><b>Volcanic Explosivity Index:</b> ' + eruption['Volcanic Explosivity Index'] + '</p>' +
+                                         '<p><b>Deaths:</b> ' + eruption['Volcano : Deaths'] + ' (' + eruption['Volcano : Deaths Description'] + ')</p>' +
+                                         '<p><b>Total Effects:</b> Deaths: ' + eruption['Total Effects : Deaths'] + ' (' + eruption['Total Effects : Deaths Description'] + ')</p>';
+
+                    // Show the details in a popup
+                    var latLng = eruption.Coordinates.split(', ').map(Number);
+                    L.popup()
+                        .setLatLng(latLng)
+                        .setContent(detailsContent)
+                        .openOn(map);
+                };
             })
             .catch(error => {
                 console.error('There has been a problem with your fetch operation:', error);
