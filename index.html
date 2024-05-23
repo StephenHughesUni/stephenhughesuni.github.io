@@ -36,19 +36,36 @@
 
         // Load Post Offices JSON
         fetch('post_offices.json')
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
             .then(postOffices => {
                 postOffices.forEach(office => {
                     const officeData = office['AnPost_ID,PO_Name,Address1,Address2,Address3,Address4,Address5,Address6,Phone,Eircode,Town,County,PO_Class,Latitude,Longitude,Opening_Hours,Services_Offered'].split(',');
-                    const marker = L.marker([parseFloat(officeData[13]), parseFloat(officeData[14])]).addTo(map);
-                    marker.bindPopup(`<b>Post Office: ${officeData[1]}</b><br><span class="button" onclick="findNearestPostBox(${parseFloat(officeData[13])}, ${parseFloat(officeData[14])})">Find Closest Post Box</span>`);
+                    const latitude = parseFloat(officeData[13]);
+                    const longitude = parseFloat(officeData[14]);
+                    if (!isNaN(latitude) && !isNaN(longitude)) {
+                        const marker = L.marker([latitude, longitude]).addTo(map);
+                        marker.bindPopup(`<b>Post Office: ${officeData[1]}</b><br><span class="button" onclick="findNearestPostBox(${latitude}, ${longitude})">Find Closest Post Box</span>`);
+                    }
                 });
+            })
+            .catch(error => {
+                console.error('Error fetching or processing post offices data:', error);
             });
 
         // Function to find the nearest post box
         function findNearestPostBox(officeLat, officeLon) {
             fetch('post_boxes.json')
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
                 .then(postBoxes => {
                     let nearestBox = null;
                     let shortestDistance = Infinity;
@@ -67,7 +84,13 @@
 
                     if (nearestBox) {
                         const boxCoords = nearestBox['Coordinates'].split(',').map(coord => parseFloat(coord));
-                        const postBoxMarker = L.marker([boxCoords[0], boxCoords[1]], {icon: L.icon({iconUrl: 'https://cdn-icons-png.flaticon.com/512/3457/3457760.png', iconSize: [25, 41], iconAnchor: [12, 41]})}).addTo(map);
+                        const postBoxMarker = L.marker([boxCoords[0], boxCoords[1]], {
+                            icon: L.icon({
+                                iconUrl: 'https://cdn-icons-png.flaticon.com/512/3457/3457760.png',
+                                iconSize: [25, 41],
+                                iconAnchor: [12, 41]
+                            })
+                        }).addTo(map);
                         L.Routing.control({
                             waypoints: [
                                 L.latLng(officeLat, officeLon),
@@ -77,6 +100,9 @@
                         }).addTo(map);
                         map.setView([officeLat, officeLon], 14);
                     }
+                })
+                .catch(error => {
+                    console.error('Error fetching or processing post boxes data:', error);
                 });
         }
 
