@@ -1,57 +1,96 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Post Offices and Post Boxes Map</title>
-    <meta charset="utf-8" />
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <title>Post Offices and Post Boxes Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
     <style>
-        #map { height: 600px; }
+        #map {
+            height: 100vh;
+            width: 100%;
+        }
+        .button {
+            display: block;
+            margin: 5px;
+            padding: 5px;
+            background-color: blue;
+            color: white;
+            text-align: center;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
     <div id="map"></div>
-    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
     <script>
         // Initialize the map
-        var map = L.map('map').setView([53.349805, -6.26031], 8); // Center the map to Ireland
+        const map = L.map('map').setView([53.3498, -6.2603], 8);
 
-        // Add OpenStreetMap tile layer
+        // Add a tile layer
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         }).addTo(map);
 
-        // Function to load JSON data
-        async function loadData(url) {
-            const response = await axios.get(url);
-            return response.data;
-        }
-
-        // Load post offices and post boxes data
-        Promise.all([loadData('post_offices.json'), loadData('post_boxes.json')]).then(data => {
-            const [postOffices, postBoxes] = data;
-
-            // Add markers for post offices
-            postOffices.forEach(office => {
-                const officeMarker = L.marker([office.Latitude, office.Longitude], {
-                    title: office.PO_Name,
-                    icon: L.icon({ iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png' })
-                }).addTo(map).bindPopup(`<b>${office.PO_Name}</b><br><button onclick="findShortestRoute(${office.Latitude}, ${office.Longitude}, ${office.Nearest_Post_Box_Lat}, ${office.Nearest_Post_Box_Lon})">Find Shortest Route to Post Box</button>`);
+        // Load Post Offices JSON
+        fetch('post_offices.json')
+            .then(response => response.json())
+            .then(postOffices => {
+                postOffices.forEach(office => {
+                    const officeData = office['AnPost_ID,PO_Name,Address1,Address2,Address3,Address4,Address5,Address6,Phone,Eircode,Town,County,PO_Class,Latitude,Longitude,Opening_Hours,Services_Offered'].split(',');
+                    const marker = L.marker([parseFloat(officeData[13]), parseFloat(officeData[14])]).addTo(map);
+                    marker.bindPopup(`<b>Post Office: ${officeData[1]}</b><br><span class="button" onclick="findNearestPostBox(${parseFloat(officeData[13])}, ${parseFloat(officeData[14])})">Find Closest Post Box</span>`);
+                });
             });
 
-            // Function to find the shortest route
-            window.findShortestRoute = (officeLat, officeLon, boxLat, boxLon) => {
-                L.Routing.control({
-                    waypoints: [
-                        L.latLng(officeLat, officeLon),
-                        L.latLng(boxLat, boxLon)
-                    ],
-                    router: L.Routing.openrouteservice('5b3ce3597851110001cf6248a96ed18ec6a94d93af5cd153b8ec280c')
-                }).addTo(map);
-            };
-        }).catch(error => console.error('Error loading data:', error));
+        // Function to find the nearest post box
+        function findNearestPostBox(officeLat, officeLon) {
+            fetch('post_boxes.json')
+                .then(response => response.json())
+                .then(postBoxes => {
+                    let nearestBox = null;
+                    let shortestDistance = Infinity;
+
+                    postBoxes.forEach(box => {
+                        const boxCoords = box['Coordinates'].split(',').map(coord => parseFloat(coord));
+                        const boxLat = boxCoords[0];
+                        const boxLon = boxCoords[1];
+                        const distance = getDistance(officeLat, officeLon, boxLat, boxLon);
+
+                        if (distance < shortestDistance) {
+                            shortestDistance = distance;
+                            nearestBox = box;
+                        }
+                    });
+
+                    if (nearestBox) {
+                        const boxCoords = nearestBox['Coordinates'].split(',').map(coord => parseFloat(coord));
+                        const postBoxMarker = L.marker([boxCoords[0], boxCoords[1]], {icon: L.icon({iconUrl: 'https://cdn-icons-png.flaticon.com/512/3457/3457760.png', iconSize: [25, 41], iconAnchor: [12, 41]})}).addTo(map);
+                        L.Routing.control({
+                            waypoints: [
+                                L.latLng(officeLat, officeLon),
+                                L.latLng(boxCoords[0], boxCoords[1])
+                            ],
+                            routeWhileDragging: true
+                        }).addTo(map);
+                        map.setView([officeLat, officeLon], 14);
+                    }
+                });
+        }
+
+        // Helper function to calculate distance between two coordinates
+        function getDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371; // Radius of the Earth in km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c; // Distance in km
+        }
     </script>
 </body>
 </html>
