@@ -27,6 +27,9 @@
                 fetch('post_boxes.json')
                     .then(response => response.json())
                     .then(postBoxes => {
+                        console.log('Post Offices:', postOffices);
+                        console.log('Post Boxes:', postBoxes);
+
                         // Create a KDTree for post boxes
                         var postBoxesCoords = postBoxes.map(pb => [pb.Latitude, pb.Longitude]);
                         var tree = new kdTree(postBoxesCoords, distance, ["Latitude", "Longitude"]);
@@ -58,7 +61,13 @@
                                 routeWhileDragging: true
                             }).addTo(map);
                         };
+                    })
+                    .catch(error => {
+                        console.error('Error loading post boxes:', error);
                     });
+            })
+            .catch(error => {
+                console.error('Error loading post offices:', error);
             });
 
         // Distance function for kd-tree
@@ -85,7 +94,7 @@
                 }
 
                 points.sort(function(a, b) {
-                    return a[dimensions[dim]] - b[dimensions[dim]];
+                    return a[dim] - b[dim];
                 });
 
                 median = Math.floor(points.length / 2);
@@ -97,9 +106,6 @@
             }
 
             function Node(obj, depth, parent) {
-                for (var d = 0; d < dimensions.length; d++) {
-                    this[dimensions[d]] = obj[dimensions[d]];
-                }
                 this.obj = obj;
                 this.depth = depth;
                 this.parent = parent;
@@ -107,21 +113,20 @@
                 this.right = null;
             }
 
-            this.nearest = function(point, maxNodes, maxDistance) {
-                var i, result, bestNodes;
-
-                bestNodes = new BinaryHeap(function(e) {
+            this.nearest = function(point, maxNodes) {
+                var bestNodes = new BinaryHeap(function(e) {
                     return -e[1];
                 });
 
                 function nearestSearch(node) {
-                    var bestChild,
-                        dimension = dimensions[node.depth % dimensions.length],
-                        ownDistance = metric(point, node),
-                        linearPoint = {},
+                    if (node === null) return;
+
+                    var dimension = dimensions[node.depth % dimensions.length],
+                        ownDistance = metric(point, node.obj),
+                        linearPoint = Array(dimensions.length),
                         linearDistance,
-                        otherChild,
-                        i;
+                        bestChild,
+                        otherChild;
 
                     function saveNode(node, distance) {
                         bestNodes.push([node, distance]);
@@ -130,18 +135,18 @@
                         }
                     }
 
-                    for (i = 0; i < dimensions.length; i += 1) {
+                    for (var i = 0; i < dimensions.length; i++) {
                         if (i === dimension) {
-                            linearPoint[dimensions[i]] = point[dimensions[i]];
+                            linearPoint[i] = point[i];
                         } else {
-                            linearPoint[dimensions[i]] = node[dimensions[i]];
+                            linearPoint[i] = node.obj[i];
                         }
                     }
 
-                    linearDistance = metric(linearPoint, node);
+                    linearDistance = metric(linearPoint, node.obj);
 
                     if (node.right === null && node.left === null) {
-                        if (ownDistance < maxDistance) {
+                        if (bestNodes.size() < maxNodes || ownDistance < bestNodes.peek()[1]) {
                             saveNode(node, ownDistance);
                         }
                         return;
@@ -152,7 +157,7 @@
                     } else if (node.left === null) {
                         bestChild = node.right;
                     } else {
-                        if (point[dimension] < node[dimension]) {
+                        if (point[dimension] < node.obj[dimension]) {
                             bestChild = node.left;
                         } else {
                             bestChild = node.right;
@@ -161,7 +166,7 @@
 
                     nearestSearch(bestChild);
 
-                    if (linearDistance < maxDistance) {
+                    if (linearDistance < bestNodes.peek()[1]) {
                         saveNode(node, ownDistance);
                     }
 
@@ -177,19 +182,11 @@
                     }
                 }
 
-                if (maxDistance) {
-                    for (i = 0; i < dimensions.length; i += 1) {
-                        if (typeof maxDistance !== "number") {
-                            maxDistance = Math.pow(maxDistance, 2);
-                        }
-                    }
-                }
-
                 nearestSearch(this.root);
 
-                result = [];
+                var result = [];
 
-                for (i = 0; i < Math.min(maxNodes, bestNodes.content.length); i += 1) {
+                for (var i = 0; i < Math.min(maxNodes, bestNodes.content.length); i++) {
                     result.push([bestNodes.content[i][0].obj, bestNodes.content[i][1]]);
                 }
                 return result;
@@ -217,24 +214,6 @@
             },
             peek: function() {
                 return this.content[0];
-            },
-            remove: function(node) {
-                var length = this.content.length;
-                for (var i = 0; i < length; i++) {
-                    if (this.content[i] === node) {
-                        var end = this.content.pop();
-                        if (i !== length - 1) {
-                            this.content[i] = end;
-                            if (this.scoreFunction(end) < this.scoreFunction(node)) {
-                                this.bubbleUp(i);
-                            } else {
-                                this.sinkDown(i);
-                            }
-                        }
-                        return;
-                    }
-                }
-                throw new Error("Node not found.");
             },
             size: function() {
                 return this.content.length;
