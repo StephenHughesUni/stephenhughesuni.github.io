@@ -38,12 +38,7 @@
 
         // Load Post Offices JSON
         fetch('post_offices.json')
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
-                return response.json();
-            })
+            .then(response => response.json())
             .then(postOffices => {
                 postOffices.forEach(office => {
                     const officeData = office['AnPost_ID,PO_Name,Address1,Address2,Address3,Address4,Address5,Address6,Phone,Eircode,Town,County,PO_Class,Latitude,Longitude,Opening_Hours,Services_Offered'].split(',');
@@ -55,19 +50,12 @@
                     }
                 });
             })
-            .catch(error => {
-                console.error('Error fetching or processing post offices data:', error);
-            });
+            .catch(error => console.error('Error fetching or processing post offices data:', error));
 
         // Function to find the nearest post box
         function findNearestPostBox(officeLat, officeLon) {
             fetch('post_boxes.json')
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-                    return response.json();
-                })
+                .then(response => response.json())
                 .then(postBoxes => {
                     let nearestBox = null;
                     let shortestDistance = Infinity;
@@ -111,9 +99,7 @@
                         map.setView([officeLat, officeLon], 14);
                     }
                 })
-                .catch(error => {
-                    console.error('Error fetching or processing post boxes data:', error);
-                });
+                .catch(error => console.error('Error fetching or processing post boxes data:', error));
         }
 
         // Helper function to calculate distance between two coordinates
