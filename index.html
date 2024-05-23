@@ -1,290 +1,96 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Post Offices and Post Boxes</title>
-    <meta charset="utf-8" />
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
-    <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+    <title>Post Offices and Post Boxes Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+    <style>
+        #map {
+            height: 100vh;
+            width: 100%;
+        }
+        .button {
+            display: block;
+            margin: 5px;
+            padding: 5px;
+            background-color: blue;
+            color: white;
+            text-align: center;
+            cursor: pointer;
+        }
+    </style>
 </head>
 <body>
-    <div id="map" style="width: 100%; height: 600px;"></div>
+    <div id="map"></div>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
     <script>
         // Initialize the map
-        var map = L.map('map').setView([53.3498, -6.2603], 8);
+        const map = L.map('map').setView([53.3498, -6.2603], 8);
 
-        // Add OpenStreetMap tile layer
+        // Add a tile layer
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         }).addTo(map);
 
-        // Load the post offices and post boxes data
-        fetch('https://raw.githubusercontent.com/StephenHughesUni/stephenhughesuni.github.io/main/post_offices.json')
+        // Load Post Offices JSON
+        fetch('post_offices.json')
             .then(response => response.json())
             .then(postOffices => {
-                fetch('https://raw.githubusercontent.com/StephenHughesUni/stephenhughesuni.github.io/main/post_boxes.json')
-                    .then(response => response.json())
-                    .then(postBoxes => {
-                        console.log('Post Offices:', postOffices);
-                        console.log('Post Boxes:', postBoxes);
-
-                        // Parse post offices data
-                        postOffices = postOffices.map(po => {
-                            let parts = po['AnPost_ID,PO_Name,Address1,Address2,Address3,Address4,Address5,Address6,Phone,Eircode,Town,County,PO_Class,Latitude,Longitude,Opening_Hours,Services_Offered'].split(',');
-                            return {
-                                id: parts[0],
-                                name: parts[1],
-                                latitude: parseFloat(parts[14]),
-                                longitude: parseFloat(parts[15])
-                            };
-                        });
-
-                        // Parse post boxes data
-                        postBoxes = postBoxes.map(pb => {
-                            let coords = pb.Coordinates.split(',');
-                            return {
-                                id: pb['Post Box ID'],
-                                latitude: parseFloat(coords[0]),
-                                longitude: parseFloat(coords[1])
-                            };
-                        });
-
-                        // Create a KDTree for post boxes
-                        var postBoxesCoords = postBoxes.map(pb => [pb.latitude, pb.longitude]);
-                        var tree = new kdTree(postBoxesCoords, distance, ["latitude", "longitude"]);
-
-                        // Function to find nearest post box
-                        function findNearestPostBox(lat, lon) {
-                            var nearest = tree.nearest([lat, lon], 1)[0];
-                            return nearest;
-                        }
-
-                        // Add post offices to the map
-                        postOffices.forEach(po => {
-                            var marker = L.marker([po.latitude, po.longitude]).addTo(map)
-                                .bindPopup('<b>Post Office:</b> ' + po.name + '<br><button onclick="calculateRoute(' + po.latitude + ',' + po.longitude + ')">Find Nearest Post Box</button>');
-
-                            marker.on('click', function(e) {
-                                map.setView(e.latlng, 14);
-                            });
-                        });
-
-                        // Function to calculate and display the route
-                        window.calculateRoute = function(lat, lon) {
-                            var nearestPostBox = findNearestPostBox(lat, lon);
-                            var start = L.latLng(lat, lon);
-                            var end = L.latLng(nearestPostBox[0][0], nearestPostBox[0][1]);
-
-                            L.Routing.control({
-                                waypoints: [start, end],
-                                routeWhileDragging: true
-                            }).addTo(map);
-                        };
-                    })
-                    .catch(error => {
-                        console.error('Error loading post boxes:', error);
-                    });
-            })
-            .catch(error => {
-                console.error('Error loading post offices:', error);
+                postOffices.forEach(office => {
+                    const officeData = office['AnPost_ID,PO_Name,Address1,Address2,Address3,Address4,Address5,Address6,Phone,Eircode,Town,County,PO_Class,Latitude,Longitude,Opening_Hours,Services_Offered'].split(',');
+                    const marker = L.marker([parseFloat(officeData[13]), parseFloat(officeData[14])]).addTo(map);
+                    marker.bindPopup(`<b>Post Office: ${officeData[1]}</b><br><span class="button" onclick="findNearestPostBox(${parseFloat(officeData[13])}, ${parseFloat(officeData[14])})">Find Closest Post Box</span>`);
+                });
             });
 
-        // Distance function for kd-tree
-        function distance(a, b) {
-            return Math.pow(a[0] - b[0], 2) + Math.pow(a[1] - b[1], 2);
-        }
+        // Function to find the nearest post box
+        function findNearestPostBox(officeLat, officeLon) {
+            fetch('post_boxes.json')
+                .then(response => response.json())
+                .then(postBoxes => {
+                    let nearestBox = null;
+                    let shortestDistance = Infinity;
 
-        // KD-Tree implementation
-        function kdTree(points, metric, dimensions) {
-            this.dimensions = dimensions;
-            this.metric = metric;
-            this.root = buildTree(points, 0, null);
+                    postBoxes.forEach(box => {
+                        const boxCoords = box['Coordinates'].split(',').map(coord => parseFloat(coord));
+                        const boxLat = boxCoords[0];
+                        const boxLon = boxCoords[1];
+                        const distance = getDistance(officeLat, officeLon, boxLat, boxLon);
 
-            function buildTree(points, depth, parent) {
-                var dim = depth % dimensions.length,
-                    median,
-                    node;
+                        if (distance < shortestDistance) {
+                            shortestDistance = distance;
+                            nearestBox = box;
+                        }
+                    });
 
-                if (points.length === 0) {
-                    return null;
-                }
-                if (points.length === 1) {
-                    return new Node(points[0], depth, parent);
-                }
-
-                points.sort(function(a, b) {
-                    return a[dim] - b[dim];
+                    if (nearestBox) {
+                        const boxCoords = nearestBox['Coordinates'].split(',').map(coord => parseFloat(coord));
+                        const postBoxMarker = L.marker([boxCoords[0], boxCoords[1]], {icon: L.icon({iconUrl: 'https://cdn-icons-png.flaticon.com/512/3457/3457760.png', iconSize: [25, 41], iconAnchor: [12, 41]})}).addTo(map);
+                        L.Routing.control({
+                            waypoints: [
+                                L.latLng(officeLat, officeLon),
+                                L.latLng(boxCoords[0], boxCoords[1])
+                            ],
+                            routeWhileDragging: true
+                        }).addTo(map);
+                        map.setView([officeLat, officeLon], 14);
+                    }
                 });
-
-                median = Math.floor(points.length / 2);
-                node = new Node(points[median], depth, parent);
-                node.left = buildTree(points.slice(0, median), depth + 1, node);
-                node.right = buildTree(points.slice(median + 1), points.length, depth + 1, node);
-
-                return node;
-            }
-
-            function Node(obj, depth, parent) {
-                this.obj = obj;
-                this.depth = depth;
-                this.parent = parent;
-                this.left = null;
-                this.right = null;
-            }
-
-            this.nearest = function(point, maxNodes) {
-                var bestNodes = new BinaryHeap(function(e) {
-                    return -e[1];
-                });
-
-                function nearestSearch(node) {
-                    if (node === null) return;
-
-                    var dimension = dimensions[node.depth % dimensions.length],
-                        ownDistance = metric(point, node.obj),
-                        linearPoint = Array(dimensions.length),
-                        linearDistance,
-                        bestChild,
-                        otherChild;
-
-                    function saveNode(node, distance) {
-                        bestNodes.push([node, distance]);
-                        if (bestNodes.size() > maxNodes) {
-                            bestNodes.pop();
-                        }
-                    }
-
-                    for (var i = 0; i < dimensions.length; i++) {
-                        if (i === dimension) {
-                            linearPoint[i] = point[i];
-                        } else {
-                            linearPoint[i] = node.obj[i];
-                        }
-                    }
-
-                    linearDistance = metric(linearPoint, node.obj);
-
-                    if (node.right === null && node.left === null) {
-                        if (bestNodes.size() < maxNodes || ownDistance < bestNodes.peek()[1]) {
-                            saveNode(node, ownDistance);
-                        }
-                        return;
-                    }
-
-                    if (node.right === null) {
-                        bestChild = node.left;
-                    } else if (node.left === null) {
-                        bestChild = node.right;
-                    } else {
-                        if (point[dimension] < node.obj[dimension]) {
-                            bestChild = node.left;
-                        } else {
-                            bestChild = node.right;
-                        }
-                    }
-
-                    nearestSearch(bestChild);
-
-                    if (linearDistance < bestNodes.peek()[1]) {
-                        saveNode(node, ownDistance);
-                    }
-
-                    if (bestNodes.size() < maxNodes || Math.abs(linearPoint[dimension] - point[dimension]) < bestNodes.peek()[1]) {
-                        if (bestChild === node.left) {
-                            otherChild = node.right;
-                        } else {
-                            otherChild = node.left;
-                        }
-                        if (otherChild !== null) {
-                            nearestSearch(otherChild);
-                        }
-                    }
-                }
-
-                nearestSearch(this.root);
-
-                var result = [];
-
-                for (var i = 0; i < Math.min(maxNodes, bestNodes.content.length); i++) {
-                    result.push([bestNodes.content[i][0].obj, bestNodes.content[i][1]]);
-                }
-                return result;
-            };
         }
 
-        function BinaryHeap(scoreFunction) {
-            this.content = [];
-            this.scoreFunction = scoreFunction;
+        // Helper function to calculate distance between two coordinates
+        function getDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371; // Radius of the Earth in km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c; // Distance in km
         }
-
-        BinaryHeap.prototype = {
-            push: function(element) {
-                this.content.push(element);
-                this.bubbleUp(this.content.length - 1);
-            },
-            pop: function() {
-                var result = this.content[0],
-                    end = this.content.pop();
-                if (this.content.length > 0) {
-                    this.content[0] = end;
-                    this.sinkDown(0);
-                }
-                return result;
-            },
-            peek: function() {
-                return this.content[0];
-            },
-            size: function() {
-                return this.content.length;
-            },
-            bubbleUp: function(n) {
-                var element = this.content[n];
-                while (n > 0) {
-                    var parentN = Math.floor((n + 1) / 2) - 1,
-                        parent = this.content[parentN];
-                    if (this.scoreFunction(element) < this.scoreFunction(parent)) {
-                        this.content[parentN] = element;
-                        this.content[n] = parent;
-                        n = parentN;
-                    } else {
-                        break;
-                    }
-                }
-            },
-            sinkDown: function(n) {
-                var length = this.content.length,
-                    element = this.content[n];
-
-                while (true) {
-                    var child2N = (n + 1) * 2,
-                        child1N = child2N - 1,
-                        swap = null,
-                        child1,
-                        child2;
-
-                    if (child1N < length) {
-                        child1 = this.content[child1N];
-                        if (this.scoreFunction(child1) < this.scoreFunction(element)) {
-                            swap = child1N;
-                        }
-                    }
-                    if (child2N < length) {
-                        child2 = this.content[child2N];
-                        if (this.scoreFunction(child2) < (swap === null ? this.scoreFunction(element) : this.scoreFunction(child1))) {
-                            swap = child2N;
-                        }
-                    }
-                    if (swap === null) {
-                        break;
-                    }
-                    this.content[n] = this.content[swap];
-                    this.content[swap] = element;
-                    n = swap;
-                }
-            }
-        };
     </script>
 </body>
 </html>
