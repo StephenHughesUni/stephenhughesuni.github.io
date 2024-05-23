@@ -46,7 +46,8 @@
                     const longitude = parseFloat(officeData[14]);
                     if (!isNaN(latitude) && !isNaN(longitude)) {
                         const marker = L.marker([latitude, longitude]).addTo(map);
-                        marker.bindPopup(`<b>Post Office: ${officeData[1]}</b><br><span class="button" onclick="findNearestPostBox(${latitude}, ${longitude})">Find Closest Post Box</span>`);
+                        const popupContent = `<b>Post Office:</b> ${officeData[1]}<br>${officeData[2]}, ${officeData[3]}, ${officeData[9]}<br><span class="button" onclick="findNearestPostBox(${latitude}, ${longitude})">Find Closest Post Box</span>`;
+                        marker.bindPopup(popupContent);
                     }
                 });
             })
@@ -74,13 +75,15 @@
 
                     if (nearestBox) {
                         const boxCoords = nearestBox['Coordinates'].split(',').map(coord => parseFloat(coord));
+                        const popupContent = `<b>Post Box ID:</b> ${nearestBox['Post Box ID']}<br><b>County:</b> ${nearestBox['County']}<br><b>Suburb:</b> ${nearestBox['Suburb']}<br><b>Locality:</b> ${nearestBox['Locality']}<br><b>Province:</b> ${nearestBox['Province']}<br><b>Postcode:</b> ${nearestBox['Postcode']}<br><b>Country:</b> ${nearestBox['Country']}<br><b>Coordinates:</b> ${nearestBox['Coordinates']}`;
+
                         const postBoxMarker = L.marker([boxCoords[0], boxCoords[1]], {
                             icon: L.icon({
                                 iconUrl: 'https://raw.githubusercontent.com/StephenHughesUni/stephenhughesuni.github.io/main/mailbox.png',
                                 iconSize: [25, 41],
                                 iconAnchor: [12, 41]
                             })
-                        }).addTo(map);
+                        }).addTo(map).bindPopup(popupContent);
 
                         // Remove existing routing control if it exists
                         if (routingControl) {
