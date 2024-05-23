@@ -92,12 +92,21 @@
                             map.removeControl(routingControl);
                         }
 
-                        // Create a new routing control
+                        // Create a new routing control with custom icons
                         routingControl = L.Routing.control({
                             waypoints: [
                                 L.latLng(officeLat, officeLon),
                                 L.latLng(boxCoords[0], boxCoords[1])
                             ],
+                            createMarker: function(i, waypoint, n) {
+                                // Only create custom marker for the post box
+                                if (i === 1) {
+                                    return L.marker(waypoint.latLng, {
+                                        icon: postBoxIcon
+                                    }).bindPopup(popupContent);
+                                }
+                                return null; // No marker for the post office
+                            },
                             routeWhileDragging: true
                         }).addTo(map);
                         
