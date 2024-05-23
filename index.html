@@ -21,18 +21,39 @@
         }).addTo(map);
 
         // Load the post offices and post boxes data
-        fetch('post_offices.json')
+        fetch('https://raw.githubusercontent.com/StephenHughesUni/stephenhughesuni.github.io/main/post_offices.json')
             .then(response => response.json())
             .then(postOffices => {
-                fetch('post_boxes.json')
+                fetch('https://raw.githubusercontent.com/StephenHughesUni/stephenhughesuni.github.io/main/post_boxes.json')
                     .then(response => response.json())
                     .then(postBoxes => {
                         console.log('Post Offices:', postOffices);
                         console.log('Post Boxes:', postBoxes);
 
+                        // Parse post offices data
+                        postOffices = postOffices.map(po => {
+                            let parts = po['AnPost_ID,PO_Name,Address1,Address2,Address3,Address4,Address5,Address6,Phone,Eircode,Town,County,PO_Class,Latitude,Longitude,Opening_Hours,Services_Offered'].split(',');
+                            return {
+                                id: parts[0],
+                                name: parts[1],
+                                latitude: parseFloat(parts[14]),
+                                longitude: parseFloat(parts[15])
+                            };
+                        });
+
+                        // Parse post boxes data
+                        postBoxes = postBoxes.map(pb => {
+                            let coords = pb.Coordinates.split(',');
+                            return {
+                                id: pb['Post Box ID'],
+                                latitude: parseFloat(coords[0]),
+                                longitude: parseFloat(coords[1])
+                            };
+                        });
+
                         // Create a KDTree for post boxes
-                        var postBoxesCoords = postBoxes.map(pb => [pb.Latitude, pb.Longitude]);
-                        var tree = new kdTree(postBoxesCoords, distance, ["Latitude", "Longitude"]);
+                        var postBoxesCoords = postBoxes.map(pb => [pb.latitude, pb.longitude]);
+                        var tree = new kdTree(postBoxesCoords, distance, ["latitude", "longitude"]);
 
                         // Function to find nearest post box
                         function findNearestPostBox(lat, lon) {
@@ -42,8 +63,8 @@
 
                         // Add post offices to the map
                         postOffices.forEach(po => {
-                            var marker = L.marker([po.Latitude, po.Longitude]).addTo(map)
-                                .bindPopup('<b>Post Office:</b> ' + po.PO_Name + '<br><button onclick="calculateRoute(' + po.Latitude + ',' + po.Longitude + ')">Find Nearest Post Box</button>');
+                            var marker = L.marker([po.latitude, po.longitude]).addTo(map)
+                                .bindPopup('<b>Post Office:</b> ' + po.name + '<br><button onclick="calculateRoute(' + po.latitude + ',' + po.longitude + ')">Find Nearest Post Box</button>');
 
                             marker.on('click', function(e) {
                                 map.setView(e.latlng, 14);
