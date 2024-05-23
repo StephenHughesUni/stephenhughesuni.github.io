@@ -1,54 +1,290 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
+    <title>Post Offices and Post Boxes</title>
+    <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Post Offices and Boxes Map</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+    <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
 </head>
 <body>
     <div id="map" style="width: 100%; height: 600px;"></div>
-    <button id="findRoute">Find Shortest Route</button>
     <script>
-        var map = L.map('map').setView([51.505, -0.09], 13);
+        // Initialize the map
+        var map = L.map('map').setView([53.3498, -6.2603], 8);
 
+        // Add OpenStreetMap tile layer
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 18,
+            attribution: '© OpenStreetMap contributors'
         }).addTo(map);
 
-        var postOffices = {{ post_offices_json }};
-        var postBoxes = {{ post_boxes_json }};
+        // Load the post offices and post boxes data
+        fetch('post_offices.json')
+            .then(response => response.json())
+            .then(postOffices => {
+                fetch('post_boxes.json')
+                    .then(response => response.json())
+                    .then(postBoxes => {
+                        // Create a KDTree for post boxes
+                        var postBoxesCoords = postBoxes.map(pb => [pb.Latitude, pb.Longitude]);
+                        var tree = new kdTree(postBoxesCoords, distance, ["Latitude", "Longitude"]);
 
-        var postOfficeMarkers = [];
-        var postBoxMarkers = [];
+                        // Function to find nearest post box
+                        function findNearestPostBox(lat, lon) {
+                            var nearest = tree.nearest([lat, lon], 1)[0];
+                            return nearest;
+                        }
 
-        postOffices.forEach(function(office) {
-            var marker = L.marker([office.Latitude, office.Longitude]).addTo(map)
-                .bindPopup('Post Office: ' + office.PO_Name);
-            postOfficeMarkers.push(marker);
-        });
+                        // Add post offices to the map
+                        postOffices.forEach(po => {
+                            var marker = L.marker([po.Latitude, po.Longitude]).addTo(map)
+                                .bindPopup('<b>Post Office:</b> ' + po.PO_Name + '<br><button onclick="calculateRoute(' + po.Latitude + ',' + po.Longitude + ')">Find Nearest Post Box</button>');
 
-        postBoxes.forEach(function(box) {
-            var marker = L.marker([box.Latitude, box.Longitude], { icon: L.icon({ iconUrl: 'red-icon.png' }) }).addTo(map)
-                .bindPopup('Post Box ID: ' + box.Post_Box_ID);
-            postBoxMarkers.push(marker);
-        });
+                            marker.on('click', function(e) {
+                                map.setView(e.latlng, 14);
+                            });
+                        });
 
-        document.getElementById('findRoute').addEventListener('click', function() {
-            postOfficeMarkers.forEach(function(officeMarker, index) {
-                var officeLatLng = officeMarker.getLatLng();
-                var nearestBox = postBoxes[index];
-                var route = L.Routing.control({
-                    waypoints: [
-                        L.latLng(officeLatLng.lat, officeLatLng.lng),
-                        L.latLng(nearestBox.Latitude, nearestBox.Longitude)
-                    ],
-                    routeWhileDragging: true
-                }).addTo(map);
+                        // Function to calculate and display the route
+                        window.calculateRoute = function(lat, lon) {
+                            var nearestPostBox = findNearestPostBox(lat, lon);
+                            var start = L.latLng(lat, lon);
+                            var end = L.latLng(nearestPostBox[0][0], nearestPostBox[0][1]);
+
+                            L.Routing.control({
+                                waypoints: [start, end],
+                                routeWhileDragging: true
+                            }).addTo(map);
+                        };
+                    });
             });
-        });
+
+        // Distance function for kd-tree
+        function distance(a, b) {
+            return Math.pow(a[0] - b[0], 2) + Math.pow(a[1] - b[1], 2);
+        }
+
+        // KD-Tree implementation
+        function kdTree(points, metric, dimensions) {
+            this.dimensions = dimensions;
+            this.metric = metric;
+            this.root = buildTree(points, 0, null);
+
+            function buildTree(points, depth, parent) {
+                var dim = depth % dimensions.length,
+                    median,
+                    node;
+
+                if (points.length === 0) {
+                    return null;
+                }
+                if (points.length === 1) {
+                    return new Node(points[0], depth, parent);
+                }
+
+                points.sort(function(a, b) {
+                    return a[dimensions[dim]] - b[dimensions[dim]];
+                });
+
+                median = Math.floor(points.length / 2);
+                node = new Node(points[median], depth, parent);
+                node.left = buildTree(points.slice(0, median), depth + 1, node);
+                node.right = buildTree(points.slice(median + 1), points.length, depth + 1, node);
+
+                return node;
+            }
+
+            function Node(obj, depth, parent) {
+                for (var d = 0; d < dimensions.length; d++) {
+                    this[dimensions[d]] = obj[dimensions[d]];
+                }
+                this.obj = obj;
+                this.depth = depth;
+                this.parent = parent;
+                this.left = null;
+                this.right = null;
+            }
+
+            this.nearest = function(point, maxNodes, maxDistance) {
+                var i, result, bestNodes;
+
+                bestNodes = new BinaryHeap(function(e) {
+                    return -e[1];
+                });
+
+                function nearestSearch(node) {
+                    var bestChild,
+                        dimension = dimensions[node.depth % dimensions.length],
+                        ownDistance = metric(point, node),
+                        linearPoint = {},
+                        linearDistance,
+                        otherChild,
+                        i;
+
+                    function saveNode(node, distance) {
+                        bestNodes.push([node, distance]);
+                        if (bestNodes.size() > maxNodes) {
+                            bestNodes.pop();
+                        }
+                    }
+
+                    for (i = 0; i < dimensions.length; i += 1) {
+                        if (i === dimension) {
+                            linearPoint[dimensions[i]] = point[dimensions[i]];
+                        } else {
+                            linearPoint[dimensions[i]] = node[dimensions[i]];
+                        }
+                    }
+
+                    linearDistance = metric(linearPoint, node);
+
+                    if (node.right === null && node.left === null) {
+                        if (ownDistance < maxDistance) {
+                            saveNode(node, ownDistance);
+                        }
+                        return;
+                    }
+
+                    if (node.right === null) {
+                        bestChild = node.left;
+                    } else if (node.left === null) {
+                        bestChild = node.right;
+                    } else {
+                        if (point[dimension] < node[dimension]) {
+                            bestChild = node.left;
+                        } else {
+                            bestChild = node.right;
+                        }
+                    }
+
+                    nearestSearch(bestChild);
+
+                    if (linearDistance < maxDistance) {
+                        saveNode(node, ownDistance);
+                    }
+
+                    if (bestNodes.size() < maxNodes || Math.abs(linearPoint[dimension] - point[dimension]) < bestNodes.peek()[1]) {
+                        if (bestChild === node.left) {
+                            otherChild = node.right;
+                        } else {
+                            otherChild = node.left;
+                        }
+                        if (otherChild !== null) {
+                            nearestSearch(otherChild);
+                        }
+                    }
+                }
+
+                if (maxDistance) {
+                    for (i = 0; i < dimensions.length; i += 1) {
+                        if (typeof maxDistance !== "number") {
+                            maxDistance = Math.pow(maxDistance, 2);
+                        }
+                    }
+                }
+
+                nearestSearch(this.root);
+
+                result = [];
+
+                for (i = 0; i < Math.min(maxNodes, bestNodes.content.length); i += 1) {
+                    result.push([bestNodes.content[i][0].obj, bestNodes.content[i][1]]);
+                }
+                return result;
+            };
+        }
+
+        function BinaryHeap(scoreFunction) {
+            this.content = [];
+            this.scoreFunction = scoreFunction;
+        }
+
+        BinaryHeap.prototype = {
+            push: function(element) {
+                this.content.push(element);
+                this.bubbleUp(this.content.length - 1);
+            },
+            pop: function() {
+                var result = this.content[0],
+                    end = this.content.pop();
+                if (this.content.length > 0) {
+                    this.content[0] = end;
+                    this.sinkDown(0);
+                }
+                return result;
+            },
+            peek: function() {
+                return this.content[0];
+            },
+            remove: function(node) {
+                var length = this.content.length;
+                for (var i = 0; i < length; i++) {
+                    if (this.content[i] === node) {
+                        var end = this.content.pop();
+                        if (i !== length - 1) {
+                            this.content[i] = end;
+                            if (this.scoreFunction(end) < this.scoreFunction(node)) {
+                                this.bubbleUp(i);
+                            } else {
+                                this.sinkDown(i);
+                            }
+                        }
+                        return;
+                    }
+                }
+                throw new Error("Node not found.");
+            },
+            size: function() {
+                return this.content.length;
+            },
+            bubbleUp: function(n) {
+                var element = this.content[n];
+                while (n > 0) {
+                    var parentN = Math.floor((n + 1) / 2) - 1,
+                        parent = this.content[parentN];
+                    if (this.scoreFunction(element) < this.scoreFunction(parent)) {
+                        this.content[parentN] = element;
+                        this.content[n] = parent;
+                        n = parentN;
+                    } else {
+                        break;
+                    }
+                }
+            },
+            sinkDown: function(n) {
+                var length = this.content.length,
+                    element = this.content[n];
+
+                while (true) {
+                    var child2N = (n + 1) * 2,
+                        child1N = child2N - 1,
+                        swap = null,
+                        child1,
+                        child2;
+
+                    if (child1N < length) {
+                        child1 = this.content[child1N];
+                        if (this.scoreFunction(child1) < this.scoreFunction(element)) {
+                            swap = child1N;
+                        }
+                    }
+                    if (child2N < length) {
+                        child2 = this.content[child2N];
+                        if (this.scoreFunction(child2) < (swap === null ? this.scoreFunction(element) : this.scoreFunction(child1))) {
+                            swap = child2N;
+                        }
+                    }
+                    if (swap === null) {
+                        break;
+                    }
+                    this.content[n] = this.content[swap];
+                    this.content[swap] = element;
+                    n = swap;
+                }
+            }
+        };
     </script>
 </body>
 </html>
